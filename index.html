@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GOLD シグナル</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --gold: #d4a843;
+    --gold-dim: #8a6820;
+    --long: #26a69a;
+    --short: #ef5350;
+    --text: #e8e0d0;
+    --text-dim: #6b6456;
+    --ai: #7c6fcd;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Pro Display', 'Hiragino Sans', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .symbol {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+  }
+
+  .timeframe {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .price-display {
+    text-align: right;
+  }
+
+  .current-price {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .price-change {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+
+  .price-change.up { color: var(--long); }
+  .price-change.down { color: var(--short); }
+
+  /* Signal badge */
+  .signal-bar {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .signal-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+  }
+
+  .signal-badge.long {
+    background: rgba(38, 166, 154, 0.15);
+    border: 1.5px solid var(--long);
+    color: var(--long);
+  }
+
+  .signal-badge.short {
+    background: rgba(239, 83, 80, 0.15);
+    border: 1.5px solid var(--short);
+    color: var(--short);
+  }
+
+  .signal-badge.wait {
+    background: rgba(212, 168, 67, 0.1);
+    border: 1.5px solid var(--gold-dim);
+    color: var(--gold);
+  }
+
+  .signal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .long .signal-dot { background: var(--long); }
+  .short .signal-dot { background: var(--short); }
+  .wait .signal-dot { background: var(--gold); animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.7); }
+  }
+
+  .signal-meta {
+    flex: 1;
+  }
+
+  .signal-reason {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .signal-ema {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* Chart */
+  .chart-container {
+    padding: 0 0 4px;
+    background: var(--bg);
+  }
+
+  #chart {
+    width: 100%;
+    height: 300px;
+  }
+
+  /* EMA info strip */
+  .ema-strip {
+    display: flex;
+    gap: 0;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .ema-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 20px;
+  }
+
+  .ema-dot {
+    width: 10px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--gold);
+  }
+
+  .ema-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .ema-value {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .position-label {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* AI section */
+  .ai-section {
+    margin: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .ai-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(124, 111, 205, 0.08);
+  }
+
+  .ai-icon {
+    width: 20px;
+    height: 20px;
+    background: var(--ai);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .ai-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ai);
+    letter-spacing: 0.05em;
+  }
+
+  .ai-timestamp {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .ai-body {
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    min-height: 60px;
+  }
+
+  .ai-body.loading {
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ai-body .dots {
+    display: inline-flex;
+    gap: 3px;
+  }
+
+  .ai-body .dots span {
+    width: 4px;
+    height: 4px;
+    background: var(--ai);
+    border-radius: 50%;
+    animation: dot-bounce 1.2s ease-in-out infinite;
+  }
+
+  .ai-body .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .ai-body .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 0 16px 12px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 14px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+
+  .stat-value.up { color: var(--long); }
+  .stat-value.down { color: var(--short); }
+
+  /* Controls */
+  .controls {
+    padding: 0 16px 24px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: opacity 0.15s;
+  }
+
+  .btn:active { opacity: 0.7; }
+
+  .btn-primary {
+    background: var(--gold);
+    color: #0a0a0f;
+  }
+
+  .btn-secondary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  /* API key input */
+  .api-setup {
+    margin: 12px 16px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .api-setup label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .api-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .api-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+    font-family: monospace;
+  }
+
+  .api-input:focus {
+    border-color: var(--gold-dim);
+  }
+
+  .btn-save {
+    padding: 8px 14px;
+    background: var(--gold);
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0a0a0f;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .api-hint {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: 10px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--long);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.off {
+    background: var(--text-dim);
+    animation: none;
+  }
+
+  .disclaimer {
+    font-size: 10px;
+    color: var(--text-dim);
+    padding: 8px 16px 20px;
+    line-height: 1.6;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <span class="symbol">XAU/USD</span>
+    <span class="timeframe">1m · EMA55</span>
+  </div>
+  <div class="price-display">
+    <div class="current-price" id="currentPrice">---.--</div>
+    <div class="price-change" id="priceChange">---</div>
+  </div>
+</div>
+
+<!-- Signal bar -->
+<div class="signal-bar">
+  <div class="signal-badge wait" id="signalBadge">
+    <div class="signal-dot"></div>
+    <span id="signalText">WAIT</span>
+  </div>
+  <div class="signal-meta">
+    <div class="signal-reason" id="signalReason">データ取得中...</div>
+    <div class="signal-ema" id="signalEmaInfo">EMA55: ---</div>
+  </div>
+</div>
+
+<!-- Chart -->
+<div class="chart-container">
+  <div id="chart"></div>
+</div>
+
+<!-- EMA strip -->
+<div class="ema-strip">
+  <div class="ema-item">
+    <div class="ema-dot"></div>
+    <span class="ema-label">EMA55</span>
+    <span class="ema-value" id="ema55Val">---</span>
+  </div>
+  <div class="position-label" id="positionLabel">価格 vs EMA55</div>
+</div>
+
+<!-- API Setup -->
+<div class="api-setup" id="apiSetup">
+  <label>TWELVE DATA API KEY（無料取得: twelvedata.com）</label>
+  <div class="api-input-row">
+    <input class="api-input" id="tdApiKey" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <button class="btn-save" onclick="saveApiKey()">保存</button>
+  </div>
+  <div class="api-hint">※ 無料プランで1分足XAU/USDが取得可能。APIキーを入力後「更新」ボタンで起動。</div>
+</div>
+
+<!-- AI Section -->
+<div class="ai-section">
+  <div class="ai-header">
+    <div class="ai-icon">AI</div>
+    <span class="ai-title">CLAUDE AI 総合判断</span>
+    <span class="ai-timestamp" id="aiTimestamp">--:--</span>
+  </div>
+  <div class="ai-body loading" id="aiBody">
+    <span>分析待機中</span>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-label">HIGH</div>
+    <div class="stat-value" id="statHigh">---</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">LOW</div>
+    <div class="stat-value" id="statLow">---</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">乖離率</div>
+    <div class="stat-value" id="statDev">---</div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn btn-primary" onclick="fetchAndUpdate()">🔄 更新</button>
+  <button class="btn btn-secondary" onclick="toggleAuto()" id="autoBtn">自動OFF</button>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot off" id="statusDot"></div>
+  <span id="statusText">待機中 — APIキーを入力して開始</span>
+</div>
+
+<div class="disclaimer">
+  ※ 本アプリは教育・学習目的のシグナル表示ツールです。投資判断はご自身の責任で行ってください。
+</div>
+
+<div style="text-align:center; padding: 8px 16px 28px; font-size: 11px; color: #3a3430; letter-spacing: 0.08em;">
+  made by hoshizora2307
+</div>
+
+<script>
+// ===================== STATE =====================
+let tdKey = localStorage.getItem('tdKey') || '';
+let claudeKey = '';
+let autoTimer = null;
+let autoOn = false;
+let chart = null;
+let candleSeries = null;
+let emaSeries = null;
+let candles = [];
+let lastSignal = 'wait';
+
+// ===================== INIT CHART =====================
+function initChart() {
+  const container = document.getElementById('chart');
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 300,
+    layout: {
+      background: { color: '#0a0a0f' },
+      textColor: '#6b6456',
+    },
+    grid: {
+      vertLines: { color: '#1a1a24' },
+      horzLines: { color: '#1a1a24' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+    },
+    rightPriceScale: {
+      borderColor: '#1e1e2e',
+      scaleMargins: { top: 0.1, bottom: 0.1 },
+    },
+    timeScale: {
+      borderColor: '#1e1e2e',
+      timeVisible: true,
+      secondsVisible: false,
+    },
+    handleScroll: true,
+    handleScale: true,
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderUpColor: '#26a69a',
+    borderDownColor: '#ef5350',
+    wickUpColor: '#26a69a',
+    wickDownColor: '#ef5350',
+  });
+
+  emaSeries = chart.addLineSeries({
+    color: '#d4a843',
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+  });
+
+  window.addEventListener('resize', () => {
+    chart.applyOptions({ width: container.clientWidth });
+  });
+}
+
+// ===================== EMA CALC =====================
+function calcEMA(closes, period) {
+  if (closes.length < period) return [];
+  const k = 2 / (period + 1);
+  const result = [];
+  let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  result.push({ index: period - 1, ema });
+  for (let i = period; i < closes.length; i++) {
+    ema = closes[i] * k + ema * (1 - k);
+    result.push({ index: i, ema });
+  }
+  return result;
+}
+
+// ===================== FETCH PRICE =====================
+async function fetchCandles() {
+  if (!tdKey) return null;
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1min&outputsize=100&apikey=${tdKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.status === 'error') throw new Error(data.message);
+    if (!data.values) throw new Error('データなし');
+    return data.values.reverse(); // 古い順
+  } catch (e) {
+    showStatus('エラー: ' + e.message, false);
+    return null;
+  }
+}
+
+// ===================== UPDATE UI =====================
+async function fetchAndUpdate() {
+  if (!tdKey) {
+    showStatus('APIキーを入力してください', false);
+    return;
+  }
+
+  showStatus('取得中...', true);
+  const values = await fetchCandles();
+  if (!values) return;
+
+  // Parse candles
+  candles = values.map(v => ({
+    time: Math.floor(new Date(v.datetime).getTime() / 1000),
+    open: parseFloat(v.open),
+    high: parseFloat(v.high),
+    low: parseFloat(v.low),
+    close: parseFloat(v.close),
+  }));
+
+  const closes = candles.map(c => c.close);
+  const emaData = calcEMA(closes, 55);
+
+  // Update chart
+  candleSeries.setData(candles);
+  const emaLine = emaData.map(d => ({
+    time: candles[d.index].time,
+    value: d.ema,
+  }));
+  emaSeries.setData(emaLine);
+  chart.timeScale().fitContent();
+
+  // Latest values
+  const latest = candles[candles.length - 1];
+  const prev = candles[candles.length - 2];
+  const currentEMA = emaData[emaData.length - 1]?.ema;
+
+  // Price display
+  document.getElementById('currentPrice').textContent = latest.close.toFixed(2);
+  const diff = latest.close - prev.close;
+  const pct = (diff / prev.close * 100).toFixed(2);
+  const changeEl = document.getElementById('priceChange');
+  changeEl.textContent = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)} (${pct}%)`;
+  changeEl.className = 'price-change ' + (diff >= 0 ? 'up' : 'down');
+
+  // Stats
+  const highs = candles.slice(-20).map(c => c.high);
+  const lows = candles.slice(-20).map(c => c.low);
+  document.getElementById('statHigh').textContent = Math.max(...highs).toFixed(2);
+  document.getElementById('statLow').textContent = Math.min(...lows).toFixed(2);
+
+  // EMA & Signal
+  if (currentEMA) {
+    document.getElementById('ema55Val').textContent = currentEMA.toFixed(2);
+    document.getElementById('signalEmaInfo').textContent = `EMA55: ${currentEMA.toFixed(2)}`;
+
+    const dev = ((latest.close - currentEMA) / currentEMA * 100);
+    const devEl = document.getElementById('statDev');
+    devEl.textContent = `${dev >= 0 ? '+' : ''}${dev.toFixed(3)}%`;
+    devEl.className = 'stat-value ' + (dev >= 0 ? 'up' : 'down');
+
+    // Signal logic
+    const badge = document.getElementById('signalBadge');
+    const signalText = document.getElementById('signalText');
+    const signalReason = document.getElementById('signalReason');
+    const posLabel = document.getElementById('positionLabel');
+
+    const aboveEMA = latest.close > currentEMA;
+    const prevAbove = prev.close > (emaData[emaData.length - 2]?.ema || currentEMA);
+    const crossUp = aboveEMA && !prevAbove;
+    const crossDown = !aboveEMA && prevAbove;
+
+    if (crossUp) {
+      lastSignal = 'long';
+      badge.className = 'signal-badge long';
+      signalText.textContent = 'LONG';
+      signalReason.textContent = 'EMA55を上抜け — 上昇トレンド転換の可能性';
+      posLabel.textContent = '📈 クロスUP';
+    } else if (crossDown) {
+      lastSignal = 'short';
+      badge.className = 'signal-badge short';
+      signalText.textContent = 'SHORT';
+      signalReason.textContent = 'EMA55を下抜け — 下降トレンド転換の可能性';
+      posLabel.textContent = '📉 クロスDOWN';
+    } else if (aboveEMA) {
+      lastSignal = 'long';
+      badge.className = 'signal-badge long';
+      signalText.textContent = 'LONG';
+      signalReason.textContent = `EMA55の上方推移中 (+${dev.toFixed(3)}%)`;
+      posLabel.textContent = '▲ EMA55の上';
+    } else {
+      lastSignal = 'short';
+      badge.className = 'signal-badge short';
+      signalText.textContent = 'SHORT';
+      signalReason.textContent = `EMA55の下方推移中 (${dev.toFixed(3)}%)`;
+      posLabel.textContent = '▼ EMA55の下';
+    }
+  }
+
+  showStatus(`最終更新: ${new Date().toLocaleTimeString('ja-JP')}`, true);
+
+  // AI analysis
+  runAIAnalysis(candles, emaData);
+}
+
+// ===================== AI ANALYSIS =====================
+async function runAIAnalysis(candles, emaData) {
+  const aiBody = document.getElementById('aiBody');
+  aiBody.className = 'ai-body loading';
+  aiBody.innerHTML = '<span>Claude が分析中</span><div class="dots"><span></span><span></span><span></span></div>';
+
+  const latest = candles[candles.length - 1];
+  const currentEMA = emaData[emaData.length - 1]?.ema;
+  const recent5 = candles.slice(-5).map(c => `O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`).join(' | ');
+
+  const prompt = `あなたはゴールド（XAU/USD）のトレーダーです。以下のデータをもとに、現在の相場状況を日本語で3〜4文で簡潔に分析してください。
+
+【データ】
+- 現在価格: ${latest.close.toFixed(2)}
+- EMA55: ${currentEMA?.toFixed(2) || 'N/A'}
+- 価格とEMA55の乖離: ${currentEMA ? ((latest.close - currentEMA) / currentEMA * 100).toFixed(3) + '%' : 'N/A'}
+- 現在シグナル: ${lastSignal.toUpperCase()}
+- 直近5本の1分足: ${recent5}
+
+分析のポイント:
+1. EMA55に対する価格の位置とトレンド方向
+2. 直近の勢い（モメンタム）
+3. 注意すべきリスク
+4. 総合的な見解（ロング/ショート/様子見）
+
+簡潔に、トレーダー目線で回答してください。`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '分析結果を取得できませんでした。';
+
+    aiBody.className = 'ai-body';
+    aiBody.innerHTML = text.replace(/\n/g, '<br>');
+    document.getElementById('aiTimestamp').textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    aiBody.className = 'ai-body';
+    aiBody.innerHTML = `<span style="color:var(--text-dim)">AI分析エラー: ${e.message}<br>※ Claude APIはclaude.aiから利用時は自動認証されます。</span>`;
+  }
+}
+
+// ===================== HELPERS =====================
+function saveApiKey() {
+  const val = document.getElementById('tdApiKey').value.trim();
+  if (val) {
+    tdKey = val;
+    localStorage.setItem('tdKey', val);
+    document.getElementById('apiSetup').style.opacity = '0.6';
+    showStatus('APIキーを保存しました', true);
+  }
+}
+
+function showStatus(msg, active) {
+  document.getElementById('statusText').textContent = msg;
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (active ? '' : ' off');
+}
+
+function toggleAuto() {
+  autoOn = !autoOn;
+  const btn = document.getElementById('autoBtn');
+  if (autoOn) {
+    btn.textContent = '自動ON (1分)';
+    btn.style.color = '#26a69a';
+    btn.style.borderColor = '#26a69a';
+    autoTimer = setInterval(fetchAndUpdate, 60000);
+    fetchAndUpdate();
+  } else {
+    btn.textContent = '自動OFF';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    clearInterval(autoTimer);
+    autoTimer = null;
+  }
+}
+
+// ===================== BOOT =====================
+initChart();
+
+if (tdKey) {
+  document.getElementById('tdApiKey').value = '••••••••••••••••';
+  document.getElementById('apiSetup').style.opacity = '0.6';
+  showStatus('APIキー読み込み済 — 「更新」で開始', true);
+}
+</script>
+</body>
+</html>
